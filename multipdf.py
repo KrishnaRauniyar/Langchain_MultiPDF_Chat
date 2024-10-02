@@ -28,10 +28,11 @@ def get_pdf_text(pdf_docs):
 
 ### Function to split text into chunks
 def get_text_chunks(text):
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=10000, chunk_overlap=1000)
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=5000, chunk_overlap=500)
     return text_splitter.split_text(text)
 
 ### Create FAISS vector store in memory
+# @st.experimental_singleton
 def get_vector_store_in_memory(text_chunks):
     embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
     vector_store = FAISS.from_texts(text_chunks, embeddings)  # Creating FAISS in memory, not saved locally
@@ -76,26 +77,39 @@ def main():
     with col1:
         st.header("📂 Upload PDF Files")
         st.write("You can upload multiple PDFs at once.")
+        # Custom message for file size limit
+        st.markdown("**Limit: 5MB per file**")
         pdf_docs = st.file_uploader("Choose PDF files", accept_multiple_files=True)
+        # Set maximum file size (5 MB)
+        max_file_size = 5 * 1024 * 1024  # 5 MB
         
         if pdf_docs:
-            if st.button("Process Files"):
-                with st.spinner("Reading and processing PDFs..."):
-                    start_time = time.time()
-                    
-                    # Read and process PDF files
-                    raw_text = get_pdf_text(pdf_docs)
-                    st.info(f"Extracted {len(raw_text)} characters from the PDF(s).")
-                    
-                    # Split text into chunks
-                    text_chunks = get_text_chunks(raw_text)
-                    st.info(f"Text split into {len(text_chunks)} chunks for processing.")
-                    
-                    # Create and keep FAISS vector store in memory
-                    vector_store = get_vector_store_in_memory(text_chunks)
-                    st.success(f"PDF processing completed in {round(time.time() - start_time, 2)} seconds!")
-                    st.session_state.vector_store = vector_store  # Store FAISS vector store in session state
-                    st.balloons()
+            if any(pdf.size > max_file_size for pdf in pdf_docs):
+                st.error("Please upload PDFs smaller than 5 MB.")
+            else:
+                if st.button("Process Files"):
+                    with st.spinner("Reading and processing PDFs..."):
+                        start_time = time.time()
+                        
+                        # Read and process PDF files
+                        raw_text = get_pdf_text(pdf_docs)
+                        st.info(f"Extracted {len(raw_text)} characters from the PDF(s).")
+                        
+                        # Add a progress bar for splitting the text
+                        progress_bar = st.progress(0)
+                        text_chunks = get_text_chunks(raw_text)
+                        for i, chunk in enumerate(text_chunks):
+                            time.sleep(0.1)  # Simulating a delay for chunk processing
+                            progress_bar.progress(i / len(text_chunks))
+                        
+                        st.info(f"Text split into {len(text_chunks)} chunks for processing.")
+                        
+                        # Create and keep FAISS vector store in memory
+                        vector_store = get_vector_store_in_memory(text_chunks)
+                        st.success(f"PDF processing completed in {round(time.time() - start_time, 2)} seconds!")
+                        st.session_state.vector_store = vector_store  # Store FAISS vector store in session state
+                        st.balloons()
+
         else:
             st.warning("Please upload PDF files to process.")
 
