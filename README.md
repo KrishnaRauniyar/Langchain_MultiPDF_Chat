@@ -1,7 +1,4 @@
-# PDF Conversational App using AI 🤖📄
-
-![App Screenshot](screenshot.png)
-
+# Chat with Multiple PDF using AI 🤖📄
 ### [Live Demo](https://multiplechat.streamlit.app/)
 
 This is a Streamlit-based web application that allows users to upload PDF files and interact with the content through a conversational interface. Powered by Google Generative AI (Gemini) and FAISS, the app enables users to ask questions from the uploaded PDF files and receive relevant answers.
@@ -31,7 +28,7 @@ This is a Streamlit-based web application that allows users to upload PDF files 
 
     ```bash
     git clone https://github.com/KrishnaRauniyar/Langchain_MultiPDF_Chat.git
-    cd pdf-conversational-app
+    cd Langchain_MultiPDF_Chat
     ```
 
 2. Install the required dependencies:
