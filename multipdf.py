@@ -31,18 +31,16 @@ def get_text_chunks(text):
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=10000, chunk_overlap=1000)
     return text_splitter.split_text(text)
 
-### Create and save FAISS vector store
-def get_vector_store(text_chunks):
-    if not os.path.exists("faiss_index"):
-        os.makedirs("faiss_index")
+### Create FAISS vector store in memory
+def get_vector_store_in_memory(text_chunks):
     embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
-    vector_store = FAISS.from_texts(text_chunks, embeddings)
-    vector_store.save_local("faiss_index")
+    vector_store = FAISS.from_texts(text_chunks, embeddings)  # Creating FAISS in memory, not saved locally
+    return vector_store
 
 ### Load conversational chain with custom prompt template
 def get_conversational_chain():
     prompt_template = """
-    Answer the question as detailed as possible using the provided context. If the answer is not available in the context, simply respond with 'Answer not available in the context of given pdfs.'
+    Answer the question as detailed as possible using the provided context. If the answer is not available in the context, simply respond with 'Answer not available in the context.'
     Context: {context}
     Question: {question}
     
@@ -53,20 +51,11 @@ def get_conversational_chain():
     return load_qa_chain(model, chain_type="stuff", prompt=prompt)
 
 ### Handle user input and query the PDF content
-def user_input(user_question):
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
-    
-    try:
-        new_db = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
-        docs = new_db.similarity_search(user_question)
-        
-        chain = get_conversational_chain()
-        response = chain({"input_documents": docs, "question": user_question}, return_only_outputs=True)
-        return response["output_text"]
-    
-    except RuntimeError as e:
-        st.error(f"Error loading FAISS index: {e}")
-        return None
+def user_input(user_question, vector_store):
+    docs = vector_store.similarity_search(user_question)
+    chain = get_conversational_chain()
+    response = chain({"input_documents": docs, "question": user_question}, return_only_outputs=True)
+    return response["output_text"]
 
 def main():
     # Page layout and configuration
@@ -102,9 +91,10 @@ def main():
                     text_chunks = get_text_chunks(raw_text)
                     st.info(f"Text split into {len(text_chunks)} chunks for processing.")
                     
-                    # Create and save vector store
-                    get_vector_store(text_chunks)
+                    # Create and keep FAISS vector store in memory
+                    vector_store = get_vector_store_in_memory(text_chunks)
                     st.success(f"PDF processing completed in {round(time.time() - start_time, 2)} seconds!")
+                    st.session_state.vector_store = vector_store  # Store FAISS vector store in session state
                     st.balloons()
         else:
             st.warning("Please upload PDF files to process.")
@@ -115,15 +105,17 @@ def main():
         user_question = st.text_input("Type your question here:")
         
         if user_question:
-            with st.spinner("Generating response..."):
-                response = user_input(user_question)
-                if response:
-                    st.success("Here's your answer:")
-                    st.write(response)
-                else:
-                    st.error("No answer found or an error occurred.")
-        else:
-            st.write("Type a question after uploading and processing PDFs.")
+            if "vector_store" in st.session_state:
+                with st.spinner("Generating response..."):
+                    vector_store = st.session_state.vector_store
+                    response = user_input(user_question, vector_store)
+                    if response:
+                        st.success("Here's your answer:")
+                        st.write(response)
+                    else:
+                        st.error("No answer found or an error occurred.")
+            else:
+                st.error("Please process PDFs before asking questions.")
     
     # Display processing steps in an expander for more user transparency
     with st.expander("📋 How It Works"):
